@@ -99,7 +99,6 @@ func validateMetadata(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
 
-	// name - обязательное
 	nameNode, hasName := fields["name"]
 	if !hasName {
 		errs = append(errs, "name is required")
@@ -107,7 +106,6 @@ func validateMetadata(node *yaml.Node, filename string) []string {
 		errs = append(errs, fmt.Sprintf("%s:%d name is required", filename, nameNode.Line))
 	}
 
-	// namespace - опционально
 	if ns, ok := fields["namespace"]; ok && ns.Tag != "!!str" {
 		errs = append(errs, fmt.Sprintf("%s:%d namespace must be string", filename, ns.Line))
 	}
@@ -119,16 +117,13 @@ func validateSpec(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
 
-	// os - опционально, но если есть - проверяем значение
 	if osNode, ok := fields["os"]; ok {
 		if osNode.Kind == yaml.ScalarNode {
-			// os это просто строка (как в примере)
 			valid := map[string]bool{"linux": true, "windows": true}
 			if !valid[osNode.Value] {
 				errs = append(errs, fmt.Sprintf("%s:%d os has unsupported value '%s'", filename, osNode.Line, osNode.Value))
 			}
 		} else if osNode.Kind == yaml.MappingNode {
-			// os это объект (с полем name)
 			osFields := mapify(osNode)
 			if nameNode, hasName := osFields["name"]; !hasName {
 				errs = append(errs, "os.name is required")
@@ -141,7 +136,6 @@ func validateSpec(node *yaml.Node, filename string) []string {
 		}
 	}
 
-	// containers - обязательно
 	if containers, ok := fields["containers"]; ok {
 		if containers.Kind != yaml.SequenceNode {
 			errs = append(errs, fmt.Sprintf("%s:%d containers must be a list", filename, containers.Line))
@@ -158,12 +152,10 @@ func validateSpec(node *yaml.Node, filename string) []string {
 
 	return errs
 }
-
 func validateContainer(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
 
-	// name - обязательно
 	nameNode, hasName := fields["name"]
 	if !hasName {
 		errs = append(errs, "containers[].name is required")
@@ -173,31 +165,26 @@ func validateContainer(node *yaml.Node, filename string) []string {
 		errs = append(errs, fmt.Sprintf("%s:%d name has invalid format '%s'", filename, nameNode.Line, nameNode.Value))
 	}
 
-	// image - обязательно
 	if imageNode, hasImage := fields["image"]; !hasImage {
 		errs = append(errs, "containers[].image is required")
 	} else if !isValidImageFormat(imageNode.Value) {
 		errs = append(errs, fmt.Sprintf("%s:%d image has invalid format '%s'", filename, imageNode.Line, imageNode.Value))
 	}
 
-	// ports - опционально
 	if ports, ok := fields["ports"]; ok && ports.Kind == yaml.SequenceNode {
 		for _, portNode := range ports.Content {
 			errs = append(errs, validatePort(portNode, filename)...)
 		}
 	}
 
-	// readinessProbe - опционально
 	if probe, ok := fields["readinessProbe"]; ok {
 		errs = append(errs, validateProbe(probe, filename)...)
 	}
 
-	// livenessProbe - опционально
 	if probe, ok := fields["livenessProbe"]; ok {
 		errs = append(errs, validateProbe(probe, filename)...)
 	}
 
-	// resources - обязательно
 	if res, ok := fields["resources"]; ok {
 		resFields := mapify(res)
 		if limits, ok := resFields["limits"]; ok {
@@ -235,7 +222,6 @@ func validateProbe(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
 
-	// httpGet - обязательно
 	if httpGetNode, ok := fields["httpGet"]; ok {
 		errs = append(errs, validateHTTPGetAction(httpGetNode, filename)...)
 	} else {
@@ -249,14 +235,12 @@ func validateHTTPGetAction(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
 
-	// path - обязательно
 	if pathNode, hasPath := fields["path"]; !hasPath {
 		errs = append(errs, "path is required")
 	} else if !strings.HasPrefix(pathNode.Value, "/") {
 		errs = append(errs, fmt.Sprintf("%s:%d path has invalid format '%s'", filename, pathNode.Line, pathNode.Value))
 	}
 
-	// port - обязательно
 	if portNode, hasPort := fields["port"]; !hasPort {
 		errs = append(errs, "port is required")
 	} else {
@@ -273,7 +257,6 @@ func validatePort(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
 
-	// containerPort - обязательно
 	if p, ok := fields["containerPort"]; ok {
 		port, err := strconv.Atoi(p.Value)
 		if err != nil || port <= 0 || port >= 65536 {
@@ -283,7 +266,6 @@ func validatePort(node *yaml.Node, filename string) []string {
 		errs = append(errs, "containerPort is required")
 	}
 
-	// protocol - опционально
 	if protNode, ok := fields["protocol"]; ok {
 		valid := map[string]bool{"TCP": true, "UDP": true}
 		if !valid[protNode.Value] {
