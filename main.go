@@ -40,8 +40,6 @@ func main() {
 	os.Exit(0)
 }
 
-// --- VALIDATION LOGIC ---
-
 func validateYAML(root *yaml.Node, filename string) []string {
 	var errs []string
 	if len(root.Content) == 0 {
@@ -50,30 +48,6 @@ func validateYAML(root *yaml.Node, filename string) []string {
 
 	doc := root.Content[0]
 	fields := mapify(doc)
-
-	// Проверяем обязательные поля верхнего уровня
-	errs = append(errs, validateTopLevel(fields, doc, filename)...)
-
-	// metadata
-	if meta, ok := fields["metadata"]; ok {
-		errs = append(errs, validateMetadata(meta, filename)...)
-	} else {
-		errs = append(errs, "metadata is required")
-	}
-
-	// spec
-	if spec, ok := fields["spec"]; ok {
-		errs = append(errs, validateSpec(spec, filename)...)
-	} else {
-		errs = append(errs, "spec is required")
-	}
-
-	return errs
-}
-
-// Проверка полей верхнего уровня
-func validateTopLevel(fields map[string]*yaml.Node, node *yaml.Node, filename string) []string {
-	var errs []string
 
 	// apiVersion
 	if apiVersion, ok := fields["apiVersion"]; ok {
@@ -93,6 +67,20 @@ func validateTopLevel(fields map[string]*yaml.Node, node *yaml.Node, filename st
 		errs = append(errs, "kind is required")
 	}
 
+	// metadata
+	if meta, ok := fields["metadata"]; ok {
+		errs = append(errs, validateMetadata(meta, filename)...)
+	} else {
+		errs = append(errs, "metadata is required")
+	}
+
+	// spec
+	if spec, ok := fields["spec"]; ok {
+		errs = append(errs, validateSpec(spec, filename)...)
+	} else {
+		errs = append(errs, "spec is required")
+	}
+
 	return errs
 }
 
@@ -107,8 +95,6 @@ func mapify(node *yaml.Node) map[string]*yaml.Node {
 	return m
 }
 
-// --- METADATA ---
-
 func validateMetadata(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
@@ -116,12 +102,12 @@ func validateMetadata(node *yaml.Node, filename string) []string {
 	// name - обязательное
 	nameNode, hasName := fields["name"]
 	if !hasName {
-		errs = append(errs, "metadata.name is required")
+		errs = append(errs, "name is required")
 	} else if nameNode.Value == "" {
-		errs = append(errs, fmt.Sprintf("%s:%d metadata.name is required", filename, nameNode.Line))
+		errs = append(errs, fmt.Sprintf("%s:%d name is required", filename, nameNode.Line))
 	}
 
-	// namespace - опционально, но если есть - должно быть string
+	// namespace - опционально
 	if ns, ok := fields["namespace"]; ok && ns.Tag != "!!str" {
 		errs = append(errs, fmt.Sprintf("%s:%d namespace must be string", filename, ns.Line))
 	}
@@ -129,15 +115,30 @@ func validateMetadata(node *yaml.Node, filename string) []string {
 	return errs
 }
 
-// --- SPEC ---
-
 func validateSpec(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
 
-	// os - опционально
+	// os - опционально, но если есть - проверяем значение
 	if osNode, ok := fields["os"]; ok {
-		errs = append(errs, validatePodOS(osNode, filename)...)
+		if osNode.Kind == yaml.ScalarNode {
+			// os это просто строка (как в примере)
+			valid := map[string]bool{"linux": true, "windows": true}
+			if !valid[osNode.Value] {
+				errs = append(errs, fmt.Sprintf("%s:%d os has unsupported value '%s'", filename, osNode.Line, osNode.Value))
+			}
+		} else if osNode.Kind == yaml.MappingNode {
+			// os это объект (с полем name)
+			osFields := mapify(osNode)
+			if nameNode, hasName := osFields["name"]; !hasName {
+				errs = append(errs, "os.name is required")
+			} else {
+				valid := map[string]bool{"linux": true, "windows": true}
+				if !valid[nameNode.Value] {
+					errs = append(errs, fmt.Sprintf("%s:%d name has unsupported value '%s'", filename, nameNode.Line, nameNode.Value))
+				}
+			}
+		}
 	}
 
 	// containers - обязательно
@@ -158,25 +159,6 @@ func validateSpec(node *yaml.Node, filename string) []string {
 	return errs
 }
 
-// Валидация PodOS
-func validatePodOS(node *yaml.Node, filename string) []string {
-	var errs []string
-	fields := mapify(node)
-
-	// os.name - обязательное поле в os
-	nameNode, hasName := fields["name"]
-	if !hasName {
-		errs = append(errs, "spec.os.name is required")
-	} else {
-		valid := map[string]bool{"linux": true, "windows": true}
-		if !valid[nameNode.Value] {
-			errs = append(errs, fmt.Sprintf("%s:%d os has unsupported value '%s'", filename, nameNode.Line, nameNode.Value))
-		}
-	}
-
-	return errs
-}
-
 func validateContainer(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
@@ -186,9 +168,9 @@ func validateContainer(node *yaml.Node, filename string) []string {
 	if !hasName {
 		errs = append(errs, "containers[].name is required")
 	} else if nameNode.Value == "" {
-		errs = append(errs, fmt.Sprintf("%s:%d containers[].name is required", filename, nameNode.Line))
+		errs = append(errs, fmt.Sprintf("%s:%d name is required", filename, nameNode.Line))
 	} else if !isSnakeCase(nameNode.Value) {
-		errs = append(errs, fmt.Sprintf("%s:%d containers[].name has invalid format '%s'", filename, nameNode.Line, nameNode.Value))
+		errs = append(errs, fmt.Sprintf("%s:%d name has invalid format '%s'", filename, nameNode.Line, nameNode.Value))
 	}
 
 	// image - обязательно
@@ -207,22 +189,22 @@ func validateContainer(node *yaml.Node, filename string) []string {
 
 	// readinessProbe - опционально
 	if probe, ok := fields["readinessProbe"]; ok {
-		errs = append(errs, validateProbe(probe, "readinessProbe", filename)...)
+		errs = append(errs, validateProbe(probe, filename)...)
 	}
 
 	// livenessProbe - опционально
 	if probe, ok := fields["livenessProbe"]; ok {
-		errs = append(errs, validateProbe(probe, "livenessProbe", filename)...)
+		errs = append(errs, validateProbe(probe, filename)...)
 	}
 
 	// resources - обязательно
 	if res, ok := fields["resources"]; ok {
 		resFields := mapify(res)
 		if limits, ok := resFields["limits"]; ok {
-			errs = append(errs, validateResourceMap(limits, "limits", filename)...)
+			errs = append(errs, validateResourceMap(limits, filename)...)
 		}
 		if req, ok := resFields["requests"]; ok {
-			errs = append(errs, validateResourceMap(req, "requests", filename)...)
+			errs = append(errs, validateResourceMap(req, filename)...)
 		}
 	} else {
 		errs = append(errs, "containers[].resources is required")
@@ -231,10 +213,7 @@ func validateContainer(node *yaml.Node, filename string) []string {
 	return errs
 }
 
-// Валидация snake_case
 func isSnakeCase(s string) bool {
-	// Может содержать буквы, цифры и подчеркивания
-	// Должно начинаться с буквы или цифры
 	if len(s) == 0 {
 		return false
 	}
@@ -242,9 +221,7 @@ func isSnakeCase(s string) bool {
 	return matched
 }
 
-// Валидация формата image
 func isValidImageFormat(s string) bool {
-	// Должен содержать registry.bigbrother.io и иметь тег версии (начинается с :)
 	if !strings.Contains(s, "registry.bigbrother.io/") {
 		return false
 	}
@@ -254,47 +231,43 @@ func isValidImageFormat(s string) bool {
 	return true
 }
 
-// Валидация Probe
-func validateProbe(node *yaml.Node, probeName string, filename string) []string {
+func validateProbe(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
 
-	// httpGet - обязательно в пробе
+	// httpGet - обязательно
 	if httpGetNode, ok := fields["httpGet"]; ok {
-		errs = append(errs, validateHTTPGetAction(httpGetNode, probeName, filename)...)
+		errs = append(errs, validateHTTPGetAction(httpGetNode, filename)...)
 	} else {
-		errs = append(errs, fmt.Sprintf("%s.httpGet is required", probeName))
+		errs = append(errs, "httpGet is required")
 	}
 
 	return errs
 }
 
-// Валидация HTTPGetAction
-func validateHTTPGetAction(node *yaml.Node, probeName string, filename string) []string {
+func validateHTTPGetAction(node *yaml.Node, filename string) []string {
 	var errs []string
 	fields := mapify(node)
 
 	// path - обязательно
 	if pathNode, hasPath := fields["path"]; !hasPath {
-		errs = append(errs, fmt.Sprintf("%s.httpGet.path is required", probeName))
+		errs = append(errs, "path is required")
 	} else if !strings.HasPrefix(pathNode.Value, "/") {
-		errs = append(errs, fmt.Sprintf("%s:%d %s.httpGet.path has invalid format '%s'", filename, pathNode.Line, probeName, pathNode.Value))
+		errs = append(errs, fmt.Sprintf("%s:%d path has invalid format '%s'", filename, pathNode.Line, pathNode.Value))
 	}
 
 	// port - обязательно
 	if portNode, hasPort := fields["port"]; !hasPort {
-		errs = append(errs, fmt.Sprintf("%s.httpGet.port is required", probeName))
+		errs = append(errs, "port is required")
 	} else {
 		port, err := strconv.Atoi(portNode.Value)
 		if err != nil || port <= 0 || port >= 65536 {
-			errs = append(errs, fmt.Sprintf("%s:%d %s.httpGet.port value out of range", filename, portNode.Line, probeName))
+			errs = append(errs, fmt.Sprintf("%s:%d port value out of range", filename, portNode.Line))
 		}
 	}
 
 	return errs
 }
-
-// --- PORTS ---
 
 func validatePort(node *yaml.Node, filename string) []string {
 	var errs []string
@@ -307,10 +280,10 @@ func validatePort(node *yaml.Node, filename string) []string {
 			errs = append(errs, fmt.Sprintf("%s:%d containerPort value out of range", filename, p.Line))
 		}
 	} else {
-		errs = append(errs, "ports[].containerPort is required")
+		errs = append(errs, "containerPort is required")
 	}
 
-	// protocol - опционально, но если есть - должно быть TCP или UDP
+	// protocol - опционально
 	if protNode, ok := fields["protocol"]; ok {
 		valid := map[string]bool{"TCP": true, "UDP": true}
 		if !valid[protNode.Value] {
@@ -321,9 +294,7 @@ func validatePort(node *yaml.Node, filename string) []string {
 	return errs
 }
 
-// --- RESOURCES ---
-
-func validateResourceMap(node *yaml.Node, resType string, filename string) []string {
+func validateResourceMap(node *yaml.Node, filename string) []string {
 	var errs []string
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key := node.Content[i].Value
