@@ -13,7 +13,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: yamlvalid <path_to_yaml>")
+		fmt.Fprintln(os.Stderr, "usage: test <path_to_yaml>")
 		os.Exit(1)
 	}
 
