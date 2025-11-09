@@ -1,4 +1,4 @@
-module module yamlvalid
+module yamlvalid
 
 go 1.23.0
 
