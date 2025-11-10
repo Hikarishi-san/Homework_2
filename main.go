@@ -100,23 +100,24 @@ func validateMetadata(node *yaml.Node, filename string) []string {
 // --- SPEC ---
 
 func validateSpec(node *yaml.Node, filename string) []string {
-	var errs []string
-	fields := mapify(node)
+ var errs []string
+ fields := mapify(node)
 
-	if osNode, ok := fields["os"]; ok {
-		valid := map[string]bool{"linux": true, "windows": true}
-		if osNode.Tag != "!!str" || !valid[osNode.Value] {
-			errs = append(errs, fmt.Sprintf("%s:%d os has unsupported value '%s'", filename, osNode.Line, osNode.Value))
-		}
-	}
+ if osNode, ok := fields["os"]; ok {
+  if osNode.Tag != "!!str" || (osNode.Value != "linux" && osNode.Value != "windows") {
+   errs = append(errs, fmt.Sprintf("%s:%d os has unsupported value '%s'", filename, osNode.Line, osNode.Value))
+  }
+ } else {
+  errs = append(errs, fmt.Sprintf("%s:%d os is required", filename, node.Line))
+ }
 
-	if containers, ok := fields["containers"]; ok && containers.Kind == yaml.SequenceNode {
-		for _, c := range containers.Content {
-			errs = append(errs, validateContainer(c, filename)...)
-		}
-	}
+ if containers, ok := fields["containers"]; ok && containers.Kind == yaml.SequenceNode {
+  for _, c := range containers.Content {
+   errs = append(errs, validateContainer(c, filename)...)
+  }
+ }
 
-	return errs
+ return errs
 }
 
 func validateContainer(node *yaml.Node, filename string) []string {
