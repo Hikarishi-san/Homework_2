@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ""
+spec:
+  os: vxViQQke
+  containers:
+    - resources:
+        requests:
+          cpu: "1"
+          memory: "500Mi"

@@ -78,23 +78,23 @@ func mapify(node *yaml.Node) map[string]*yaml.Node {
 // --- METADATA ---
 
 func validateMetadata(node *yaml.Node, filename string) []string {
-	var errs []string
-	fields := mapify(node)
+ var errs []string
+ fields := mapify(node)
 
-	nameNode, hasName := fields["name"]
-	if !hasName || nameNode.Value == "" {
-		line := node.Line
-		if hasName {
-			line = nameNode.Line
-		}
-		errs = append(errs, fmt.Sprintf("%s:%d name is required", filename, line))
-	}
+ nameNode, hasName := fields["name"]
+ if !hasName || nameNode.Value == "" {
+  line := node.Line
+  if hasName {
+   line = nameNode.Line
+  }
+  errs = append(errs, fmt.Sprintf("%s:%d name is required", filename, line))
+ }
 
-	if ns, ok := fields["namespace"]; ok && ns.Tag != "!!str" {
-		errs = append(errs, fmt.Sprintf("%s:%d namespace must be string", filename, ns.Line))
-	}
+ if ns, ok := fields["namespace"]; ok && ns.Tag != "!!str" {
+  errs = append(errs, fmt.Sprintf("%s:%d namespace must be string", filename, ns.Line))
+ }
 
-	return errs
+ return errs
 }
 
 // --- SPEC ---
