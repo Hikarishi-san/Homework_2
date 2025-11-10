@@ -32,7 +32,7 @@ func main() {
 
 	if len(errs) > 0 {
 		for _, e := range errs {
-			fmt.Fprintln(os.Stderr, e)
+			fmt.Println(e)
 		}
 		os.Exit(1)
 	}
@@ -161,7 +161,7 @@ func validatePort(node *yaml.Node, filename string) []string {
 	if p, ok := fields["containerPort"]; ok {
 		port, err := strconv.Atoi(p.Value)
 		if err != nil || port <= 0 || port >= 65536 {
-			errs = append(errs, fmt.Sprintf("%s:%d containerPort value out of range", filename, p.Line))
+			errs = append(errs, fmt.Sprintf("%s:%d port value out of range", filename, p.Line))
 		}
 	}
 
