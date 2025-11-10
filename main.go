@@ -104,7 +104,7 @@ func validateSpec(node *yaml.Node, filename string) []string {
  fields := mapify(node)
 
  if osNode, ok := fields["os"]; ok {
-  if osNode.Tag != "!!str" || (osNode.Value != "linux" && osNode.Value != "windows") {
+  if osNode.Value != "linux" && osNode.Value != "windows" {
    errs = append(errs, fmt.Sprintf("%s:%d os has unsupported value '%s'", filename, osNode.Line, osNode.Value))
   }
  } else {
@@ -171,22 +171,23 @@ func validatePort(node *yaml.Node, filename string) []string {
 // --- RESOURCES ---
 
 func validateResourceMap(node *yaml.Node, filename string) []string {
-	var errs []string
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		key := node.Content[i].Value
-		val := node.Content[i+1]
+ var errs []string
+ for i := 0; i+1 < len(node.Content); i += 2 {
+  key := node.Content[i].Value
+  val := node.Content[i+1]
 
-		switch key {
-		case "cpu":
-			if val.Tag != "!!int" {
-				errs = append(errs, fmt.Sprintf("%s:%d cpu must be int", filename, val.Line))
-			}
-		case "memory":
-			re := regexp.MustCompile(`^\d+(Gi|Mi|Ki)$`)
-			if val.Tag != "!!str" || !re.MatchString(val.Value) {
-				errs = append(errs, fmt.Sprintf("%s:%d memory has invalid format '%s'", filename, val.Line, val.Value))
-			}
-		}
-	}
-	return errs
+  switch key {
+  case "cpu":
+   // значение может быть !!str или !!int, но если строка — ошибка
+   if val.Tag != "!!int" {
+    errs = append(errs, fmt.Sprintf("%s:%d cpu must be int", filename, val.Line))
+   }
+  case "memory":
+   re := regexp.MustCompile(`^\d+(Gi|Mi|Ki)$`)
+   if val.Tag != "!!str" || !re.MatchString(val.Value) {
+    errs = append(errs, fmt.Sprintf("%s:%d memory has invalid format '%s'", filename, val.Line, val.Value))
+   }
+  }
+ }
+ return errs
 }
