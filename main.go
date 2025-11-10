@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
-
-	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -28,7 +28,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	errs := validateYAML(&root, filename)
+	displayName := filepath.Base(filename)
+	errs := validateYAML(&root, displayName)
 
 	if len(errs) > 0 {
 		for _, e := range errs {
@@ -78,46 +79,46 @@ func mapify(node *yaml.Node) map[string]*yaml.Node {
 // --- METADATA ---
 
 func validateMetadata(node *yaml.Node, filename string) []string {
- var errs []string
- fields := mapify(node)
+	var errs []string
+	fields := mapify(node)
 
- nameNode, hasName := fields["name"]
- if !hasName || nameNode.Value == "" {
-  line := node.Line
-  if hasName {
-   line = nameNode.Line
-  }
-  errs = append(errs, fmt.Sprintf("%s:%d name is required", filename, line))
- }
+	nameNode, hasName := fields["name"]
+	if !hasName || nameNode.Value == "" {
+		line := node.Line
+		if hasName {
+			line = nameNode.Line
+		}
+		errs = append(errs, fmt.Sprintf("%s:%d name is required", filename, line))
+	}
 
- if ns, ok := fields["namespace"]; ok && ns.Tag != "!!str" {
-  errs = append(errs, fmt.Sprintf("%s:%d namespace must be string", filename, ns.Line))
- }
+	if ns, ok := fields["namespace"]; ok && ns.Tag != "!!str" {
+		errs = append(errs, fmt.Sprintf("%s:%d namespace must be string", filename, ns.Line))
+	}
 
- return errs
+	return errs
 }
 
 // --- SPEC ---
 
 func validateSpec(node *yaml.Node, filename string) []string {
- var errs []string
- fields := mapify(node)
+	var errs []string
+	fields := mapify(node)
 
- if osNode, ok := fields["os"]; ok {
-  if osNode.Value != "linux" && osNode.Value != "windows" {
-   errs = append(errs, fmt.Sprintf("%s:%d os has unsupported value '%s'", filename, osNode.Line, osNode.Value))
-  }
- } else {
-  errs = append(errs, fmt.Sprintf("%s:%d os is required", filename, node.Line))
- }
+	if osNode, ok := fields["os"]; ok {
+		if osNode.Value != "linux" && osNode.Value != "windows" {
+			errs = append(errs, fmt.Sprintf("%s:%d os has unsupported value '%s'", filename, osNode.Line, osNode.Value))
+		}
+	} else {
+		errs = append(errs, fmt.Sprintf("%s:%d os is required", filename, node.Line))
+	}
 
- if containers, ok := fields["containers"]; ok && containers.Kind == yaml.SequenceNode {
-  for _, c := range containers.Content {
-   errs = append(errs, validateContainer(c, filename)...)
-  }
- }
+	if containers, ok := fields["containers"]; ok && containers.Kind == yaml.SequenceNode {
+		for _, c := range containers.Content {
+			errs = append(errs, validateContainer(c, filename)...)
+		}
+	}
 
- return errs
+	return errs
 }
 
 func validateContainer(node *yaml.Node, filename string) []string {
@@ -171,23 +172,23 @@ func validatePort(node *yaml.Node, filename string) []string {
 // --- RESOURCES ---
 
 func validateResourceMap(node *yaml.Node, filename string) []string {
- var errs []string
- for i := 0; i+1 < len(node.Content); i += 2 {
-  key := node.Content[i].Value
-  val := node.Content[i+1]
+	var errs []string
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		key := node.Content[i].Value
+		val := node.Content[i+1]
 
-  switch key {
-  case "cpu":
-   // значение может быть !!str или !!int, но если строка — ошибка
-   if val.Tag != "!!int" {
-    errs = append(errs, fmt.Sprintf("%s:%d cpu must be int", filename, val.Line))
-   }
-  case "memory":
-   re := regexp.MustCompile(`^\d+(Gi|Mi|Ki)$`)
-   if val.Tag != "!!str" || !re.MatchString(val.Value) {
-    errs = append(errs, fmt.Sprintf("%s:%d memory has invalid format '%s'", filename, val.Line, val.Value))
-   }
-  }
- }
- return errs
+		switch key {
+		case "cpu":
+			// значение может быть !!str или !!int, но если строка — ошибка
+			if val.Tag != "!!int" {
+				errs = append(errs, fmt.Sprintf("%s:%d cpu must be int", filename, val.Line))
+			}
+		case "memory":
+			re := regexp.MustCompile(`^\d+(Gi|Mi|Ki)$`)
+			if val.Tag != "!!str" || !re.MatchString(val.Value) {
+				errs = append(errs, fmt.Sprintf("%s:%d memory has invalid format '%s'", filename, val.Line, val.Value))
+			}
+		}
+	}
+	return errs
 }
